@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from './api'
 import { useMicrosoftAuth } from './useMicrosoftAuth'
 import { AssistantPanel } from './components/AssistantPanel'
@@ -84,13 +84,17 @@ function App() {
     toastTimer.current = window.setTimeout(() => setToast(null), 2500)
   }, [])
 
+  // Use a ref to avoid re-creating refresh when getToken identity changes
+  const msRef = useRef(ms)
+  msRef.current = ms
+
   const refresh = useCallback(async () => {
-    if (!ms.isSignedIn) {
+    if (!msRef.current.isSignedIn) {
       setLoading(false)
       return
     }
     try {
-      const token = await ms.getToken()
+      const token = await msRef.current.getToken()
       if (!token) {
         setLoading(false)
         return
@@ -109,11 +113,14 @@ function App() {
     } finally {
       setLoading(false)
     }
-  }, [ms.isSignedIn, ms.getToken, showToast])
+  }, [showToast])
 
   useEffect(() => {
-    refresh()
-  }, [refresh])
+    if (ms.isSignedIn) {
+      refresh()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ms.isSignedIn])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
