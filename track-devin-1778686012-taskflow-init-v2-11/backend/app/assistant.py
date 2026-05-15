@@ -34,8 +34,8 @@ GEMINI_TIMEOUT = 20.0
 # ---------------------------------------------------------------------------
 # Azure OpenAI config
 # ---------------------------------------------------------------------------
-AZURE_OPENAI_API_VERSION = "2024-08-01-preview"
-AZURE_OPENAI_TIMEOUT = 30.0
+AZURE_OPENAI_API_VERSION = "2024-10-21"
+AZURE_OPENAI_TIMEOUT = 60.0
 
 
 def _gemini_url() -> str:
@@ -263,13 +263,22 @@ async def _call_azure_openai(
         "max_tokens": 1000,
     }
 
-    if http_client is None:
-        async with httpx.AsyncClient(timeout=AZURE_OPENAI_TIMEOUT) as client:
-            response = await client.post(url, headers=headers, json=body)
-    else:
-        response = await http_client.post(
-            url, headers=headers, json=body, timeout=AZURE_OPENAI_TIMEOUT
-        )
+    try:
+        if http_client is None:
+            async with httpx.AsyncClient(timeout=AZURE_OPENAI_TIMEOUT) as client:
+                response = await client.post(url, headers=headers, json=body)
+        else:
+            response = await http_client.post(
+                url, headers=headers, json=body, timeout=AZURE_OPENAI_TIMEOUT
+            )
+    except httpx.TimeoutException as exc:
+        raise AssistantError(
+            "Azure OpenAI request timed out (60s). The model may be overloaded — try again."
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise AssistantError(
+            f"Network error calling Azure OpenAI: {exc}"
+        ) from exc
 
     if response.status_code >= 400:
         detail = response.text[:500]
