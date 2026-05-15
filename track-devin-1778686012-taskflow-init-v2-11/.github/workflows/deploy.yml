@@ -1,0 +1,91 @@
+name: Deploy to Azure
+
+# Deploys both halves of TaskFlow:
+#   - frontend → Azure Static Web Apps (free tier works fine)
+#   - backend  → Azure Container Apps (Docker image built from backend/Dockerfile)
+#
+# Auth is via OIDC federated identity (no client secrets in the repo).
+# Required GitHub repository secrets:
+#   AZURE_CLIENT_ID            – App registration / Service Principal used for deploy
+#   AZURE_TENANT_ID            – Same App registration's tenant
+#   AZURE_SUBSCRIPTION_ID      – Target Azure subscription
+#   AZURE_RESOURCE_GROUP       – Resource group containing the Static Web App + Container App
+#   AZURE_STATIC_WEB_APPS_API_TOKEN – Deployment token from Azure Static Web Apps
+#   AZURE_CONTAINER_APP_NAME   – Name of the existing Azure Container App
+#   AZURE_CONTAINER_REGISTRY   – ACR login server (e.g. taskflowacr.azurecr.io)
+#   AZURE_CONTAINER_IMAGE      – Image name in ACR (e.g. taskflow-backend)
+#   GEMINI_API_KEY             – Forwarded to the running container
+# Required GitHub repository variables (vars):
+#   VITE_AZURE_CLIENT_ID       – Public Entra App registration ID for the SPA
+#   VITE_AZURE_TENANT_ID       – Tenant ID (or "common")
+#   VITE_API_BASE              – Public URL of the deployed backend
+#                                (e.g. https://taskflow-backend.<region>.azurecontainerapps.io)
+#
+# The first deploy must be done manually (create resource group, Static Web App,
+# ACR, Container App). After that this workflow handles every push to main.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+      - name: Build
+        working-directory: frontend
+        env:
+          VITE_AZURE_CLIENT_ID: ${{ vars.VITE_AZURE_CLIENT_ID }}
+          VITE_AZURE_TENANT_ID: ${{ vars.VITE_AZURE_TENANT_ID }}
+          VITE_API_BASE: ${{ vars.VITE_API_BASE }}
+        run: npm run build
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: 'frontend/dist'
+          skip_app_build: true
+          skip_api_build: true
+
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: ACR login
+        run: az acr login --name ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+      - name: Build & push image
+        working-directory: backend
+        run: |
+          IMAGE="${{ secrets.AZURE_CONTAINER_REGISTRY }}/${{ secrets.AZURE_CONTAINER_IMAGE }}:${{ github.sha }}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+      - name: Update Container App
+        run: |
+          az containerapp update \
+            --name "${{ secrets.AZURE_CONTAINER_APP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --image "$IMAGE" \
+            --set-env-vars GEMINI_API_KEY=secretref:gemini-api-key
