@@ -1,11 +1,8 @@
 """Task storage abstraction with Azure Cosmos DB and in-memory backends.
 
-The application talks to a `TaskRepository`. In production we wire the
-`CosmosTaskRepository`, which stores each task as a JSON document in a
-Cosmos DB container partitioned by `/proj` (project name). For local
-development without a Cosmos account, and for the test suite, the
-`InMemoryTaskRepository` is used instead — it has identical semantics
-without any external dependency.
+Partition key is now `/user_id` — each user's tasks live in their own
+logical partition. All query methods require a `user_id` parameter so
+one user can never see another user's data.
 
 Selection happens in `get_repository()` based on environment variables:
 
@@ -15,9 +12,7 @@ Selection happens in `get_repository()` based on environment variables:
   COSMOS_DATABASE   – database name (default: "taskflow")
   COSMOS_CONTAINER  – container name (default: "tasks")
 
-If neither key nor AAD is configured, we fall back to in-memory storage
-and log a warning. This keeps `uv run pytest` and local `uvicorn` running
-without a real Azure account.
+If neither key nor AAD is configured, we fall back to in-memory storage.
 """
 from __future__ import annotations
 
@@ -34,21 +29,21 @@ log = logging.getLogger(__name__)
 
 
 class TaskRepository(Protocol):
-    """Storage interface used by the API layer."""
+    """Storage interface used by the API layer. All methods are user-scoped."""
 
-    def list_tasks(self) -> list[Task]: ...
+    def list_tasks(self, user_id: str) -> list[Task]: ...
 
-    def get_task(self, task_id: str) -> Task | None: ...
+    def get_task(self, task_id: str, user_id: str) -> Task | None: ...
 
     def add_task(self, task: Task) -> Task: ...
 
     def update_task(self, task: Task) -> Task: ...
 
-    def delete_task(self, task_id: str) -> bool: ...
+    def delete_task(self, task_id: str, user_id: str) -> bool: ...
 
-    def find_at_slot(self, due: date, due_time: str) -> list[Task]: ...
+    def find_at_slot(self, user_id: str, due: date, due_time: str) -> list[Task]: ...
 
-    def is_empty(self) -> bool: ...
+    def is_empty_for_user(self, user_id: str) -> bool: ...
 
 
 # ---------------------------------------------------------------------------
@@ -63,18 +58,19 @@ class InMemoryTaskRepository:
         self._tasks: dict[str, Task] = {}
         self._lock = threading.RLock()
 
-    def list_tasks(self) -> list[Task]:
+    def list_tasks(self, user_id: str) -> list[Task]:
         with self._lock:
-            # Stable ordering by created_at then id, mirroring "ORDER BY id"
-            # from the previous SQLite-backed implementation.
             return sorted(
-                self._tasks.values(),
+                (t for t in self._tasks.values() if t.user_id == user_id),
                 key=lambda t: (t.created_at, t.id),
             )
 
-    def get_task(self, task_id: str) -> Task | None:
+    def get_task(self, task_id: str, user_id: str) -> Task | None:
         with self._lock:
-            return self._tasks.get(task_id)
+            task = self._tasks.get(task_id)
+            if task and task.user_id == user_id:
+                return task
+            return None
 
     def add_task(self, task: Task) -> Task:
         with self._lock:
@@ -86,21 +82,25 @@ class InMemoryTaskRepository:
             self._tasks[task.id] = task
             return task
 
-    def delete_task(self, task_id: str) -> bool:
+    def delete_task(self, task_id: str, user_id: str) -> bool:
         with self._lock:
-            return self._tasks.pop(task_id, None) is not None
+            task = self._tasks.get(task_id)
+            if task and task.user_id == user_id:
+                del self._tasks[task_id]
+                return True
+            return False
 
-    def find_at_slot(self, due: date, due_time: str) -> list[Task]:
+    def find_at_slot(self, user_id: str, due: date, due_time: str) -> list[Task]:
         with self._lock:
             return [
                 t
                 for t in self._tasks.values()
-                if t.due == due and t.due_time == due_time
+                if t.user_id == user_id and t.due == due and t.due_time == due_time
             ]
 
-    def is_empty(self) -> bool:
+    def is_empty_for_user(self, user_id: str) -> bool:
         with self._lock:
-            return not self._tasks
+            return not any(t.user_id == user_id for t in self._tasks.values())
 
 
 # ---------------------------------------------------------------------------
@@ -109,13 +109,10 @@ class InMemoryTaskRepository:
 
 
 def _task_to_doc(task: Task) -> dict[str, Any]:
-    """Serialise a Task to a JSON-safe Cosmos document.
-
-    Cosmos stores JSON, so dates/datetimes go in as ISO strings. The `id`
-    must be a non-empty string. The partition key is `proj`.
-    """
+    """Serialise a Task to a JSON-safe Cosmos document."""
     return {
         "id": task.id,
+        "user_id": task.user_id,
         "title": task.title,
         "desc": task.desc,
         "status": task.status,
@@ -137,6 +134,7 @@ def _doc_to_task(doc: dict[str, Any]) -> Task:
     raw_updated = doc.get("updated_at")
     return Task(
         id=str(doc["id"]),
+        user_id=doc.get("user_id", ""),
         title=doc.get("title", ""),
         desc=doc.get("desc", "") or "",
         status=doc.get("status", "todo"),
@@ -158,11 +156,11 @@ def _doc_to_task(doc: dict[str, Any]) -> Task:
 class CosmosTaskRepository:
     """Cosmos DB NoSQL Core API implementation of `TaskRepository`.
 
-    The container is created on first use if it doesn't exist. Partition key
-    is `/proj` so reads filtered by project go to a single partition.
+    Partition key is `/user_id` — each user's tasks are isolated in their
+    own logical partition for efficient reads and strong data isolation.
     """
 
-    PARTITION_KEY_PATH = "/proj"
+    PARTITION_KEY_PATH = "/user_id"
 
     def __init__(
         self,
@@ -172,7 +170,6 @@ class CosmosTaskRepository:
         database_name: str = "taskflow",
         container_name: str = "tasks",
     ) -> None:
-        # Imported lazily so the test environment doesn't need the SDK loaded.
         from azure.cosmos import CosmosClient, PartitionKey  # type: ignore[import-not-found]
 
         self._client = CosmosClient(endpoint, credential=credential)
@@ -182,68 +179,60 @@ class CosmosTaskRepository:
             partition_key=PartitionKey(path=self.PARTITION_KEY_PATH),
         )
         log.info(
-            "Cosmos DB repository ready (database=%s, container=%s)",
+            "Cosmos DB repository ready (database=%s, container=%s, partition_key=%s)",
             database_name,
             container_name,
+            self.PARTITION_KEY_PATH,
         )
 
     # --- TaskRepository protocol --------------------------------------------------
 
-    def list_tasks(self) -> list[Task]:
+    def list_tasks(self, user_id: str) -> list[Task]:
         items: Iterable[dict[str, Any]] = self._container.query_items(
-            query="SELECT * FROM c ORDER BY c.created_at ASC",
-            enable_cross_partition_query=True,
+            query="SELECT * FROM c WHERE c.user_id = @uid ORDER BY c.created_at ASC",
+            parameters=[{"name": "@uid", "value": user_id}],
+            partition_key=user_id,
         )
         return [_doc_to_task(doc) for doc in items]
 
-    def get_task(self, task_id: str) -> Task | None:
-        # We don't know the partition for a given id without a lookup, so
-        # use a cross-partition query keyed by id.
-        items = list(
-            self._container.query_items(
-                query="SELECT * FROM c WHERE c.id = @id",
-                parameters=[{"name": "@id", "value": task_id}],
-                enable_cross_partition_query=True,
-            )
-        )
-        return _doc_to_task(items[0]) if items else None
+    def get_task(self, task_id: str, user_id: str) -> Task | None:
+        try:
+            doc = self._container.read_item(item=task_id, partition_key=user_id)
+            return _doc_to_task(doc)
+        except Exception:  # noqa: BLE001
+            return None
 
     def add_task(self, task: Task) -> Task:
         self._container.create_item(body=_task_to_doc(task))
         return task
 
     def update_task(self, task: Task) -> Task:
-        # `upsert_item` makes the call idempotent and avoids needing to know
-        # the document's current `_etag`. Partition key is derived from the
-        # `proj` field in the body.
         self._container.upsert_item(body=_task_to_doc(task))
         return task
 
-    def delete_task(self, task_id: str) -> bool:
-        existing = self.get_task(task_id)
-        if existing is None:
+    def delete_task(self, task_id: str, user_id: str) -> bool:
+        try:
+            self._container.delete_item(item=task_id, partition_key=user_id)
+            return True
+        except Exception:  # noqa: BLE001
             return False
-        self._container.delete_item(item=existing.id, partition_key=existing.proj)
-        return True
 
-    def find_at_slot(self, due: date, due_time: str) -> list[Task]:
+    def find_at_slot(self, user_id: str, due: date, due_time: str) -> list[Task]:
         items = self._container.query_items(
-            query=(
-                "SELECT * FROM c WHERE c.due = @due AND c.due_time = @due_time"
-            ),
+            query="SELECT * FROM c WHERE c.due = @due AND c.due_time = @due_time",
             parameters=[
                 {"name": "@due", "value": due.isoformat()},
                 {"name": "@due_time", "value": due_time},
             ],
-            enable_cross_partition_query=True,
+            partition_key=user_id,
         )
         return [_doc_to_task(doc) for doc in items]
 
-    def is_empty(self) -> bool:
+    def is_empty_for_user(self, user_id: str) -> bool:
         items = list(
             self._container.query_items(
                 query="SELECT VALUE COUNT(1) FROM c",
-                enable_cross_partition_query=True,
+                partition_key=user_id,
             )
         )
         count = items[0] if items else 0
@@ -295,7 +284,7 @@ def _build_cosmos_repository() -> TaskRepository | None:
             database_name=database_name,
             container_name=container_name,
         )
-    except Exception as exc:  # pragma: no cover - depends on Azure availability
+    except Exception as exc:  # pragma: no cover
         log.exception("Failed to initialise Cosmos DB repository: %s", exc)
         return None
 

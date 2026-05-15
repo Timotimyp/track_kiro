@@ -92,11 +92,12 @@ def _slot_to_utc_range(due: date, due_time: str) -> tuple[datetime, datetime]:
 
 def _is_slot_free(
     repo: TaskRepository,
+    user_id: str,
     due: date,
     due_time: str,
     calendar_events: list[GraphEvent],
 ) -> bool:
-    if repo.find_at_slot(due, due_time):
+    if repo.find_at_slot(user_id, due, due_time):
         return False
     slot_start, slot_end = _slot_to_utc_range(due, due_time)
     if events_overlapping(calendar_events, slot_start, slot_end):
@@ -106,6 +107,7 @@ def _is_slot_free(
 
 def compute_alternatives(
     repo: TaskRepository,
+    user_id: str,
     due: date,
     due_time: str,
     *,
@@ -121,7 +123,7 @@ def compute_alternatives(
         if key in seen:
             continue
         seen.add(key)
-        if not _is_slot_free(repo, cand_date, cand_time, events):
+        if not _is_slot_free(repo, user_id, cand_date, cand_time, events):
             continue
         free.append(AssistantAlternative(due=cand_date, due_time=cand_time))
         if len(free) >= max_alternatives:
@@ -166,6 +168,7 @@ def _outlook_events_to_conflict(
 
 async def check_conflict(
     repo: TaskRepository,
+    user_id: str,
     due: date | None,
     due_time: str | None,
     *,
@@ -178,7 +181,7 @@ async def check_conflict(
     if due is None or not due_time:
         return None
 
-    local_conflicts = repo.find_at_slot(due, due_time)
+    local_conflicts = repo.find_at_slot(user_id, due, due_time)
 
     calendar_events: list[GraphEvent] = []
     overlapping: list[GraphEvent] = []
@@ -198,6 +201,6 @@ async def check_conflict(
         overlapping
     )
     alternatives = compute_alternatives(
-        repo, due, due_time, calendar_events=calendar_events
+        repo, user_id, due, due_time, calendar_events=calendar_events
     )
     return AssistantConflict(conflicts=conflicts, alternatives=alternatives)

@@ -41,13 +41,16 @@ def _new_id() -> str:
 class Task(BaseModel):
     """Canonical Task document stored in Cosmos DB.
 
-    Cosmos requires a string `id`. We also keep `proj` as the partition key,
-    so the repository layer can route reads/writes efficiently.
+    Cosmos requires a string `id`. The partition key is now `/user_id`
+    so each user's tasks live in their own logical partition — enabling
+    efficient single-partition reads for the common "list my tasks" query.
     """
 
     model_config = ConfigDict(populate_by_name=True)
 
     id: str = Field(default_factory=_new_id)
+    # Owner of the task — Microsoft Graph Object ID (OID).
+    user_id: str = ""
     title: str
     desc: str = ""
     status: Status = "todo"
