@@ -2,14 +2,15 @@
 
 Two sources of "occupied" slots:
 
-1. The TaskFlow SQLite DB — exact `due` + `due_time` match. Tasks have no
-   duration field, so we treat them as point-in-time slots.
-2. The user's Outlook Calendar (optional) — fetched via Microsoft Graph using
-   the access token forwarded by the frontend. Outlook events have real
-   `start` and `end`, so they're treated as intervals.
+1. The TaskFlow task store (Azure Cosmos DB in production, in-memory in
+   tests/dev) — exact `due` + `due_time` match. Tasks have no duration
+   field, so we treat them as point-in-time slots.
+2. The user's Outlook Calendar (optional) — fetched via Microsoft Graph
+   using the access token forwarded by the frontend. Outlook events have
+   real `start` and `end`, so they're treated as intervals.
 
-When the AI proposes a slot, we look in both sources. If anything overlaps, we
-return a conflict block with the conflicting items and up to 3 free
+When the AI proposes a slot, we look in both sources. If anything overlaps,
+we return a conflict block with the conflicting items and up to 3 free
 alternatives. Alternatives are checked against both sources too.
 """
 from __future__ import annotations
@@ -18,7 +19,6 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Literal
 
 from pydantic import BaseModel
-from sqlmodel import Session, select
 
 from app.graph import (
     GraphEvent,
@@ -26,6 +26,7 @@ from app.graph import (
     fetch_calendar_view,
 )
 from app.models import Task
+from app.repository import TaskRepository
 
 SLOT_DURATION_MINUTES = 60
 """Assumed length of an AI-suggested slot when comparing against Outlook events."""
@@ -53,11 +54,6 @@ class AssistantAlternative(BaseModel):
 class AssistantConflict(BaseModel):
     conflicts: list[AssistantConflictTask]
     alternatives: list[AssistantAlternative]
-
-
-def _find_local_at_slot(session: Session, due: date, due_time: str) -> list[Task]:
-    stmt = select(Task).where(Task.due == due, Task.due_time == due_time)
-    return list(session.exec(stmt).all())
 
 
 def _shift_same_day(due: date, due_time: str, hours: int) -> tuple[date, str] | None:
@@ -95,9 +91,12 @@ def _slot_to_utc_range(due: date, due_time: str) -> tuple[datetime, datetime]:
 
 
 def _is_slot_free(
-    session: Session, due: date, due_time: str, calendar_events: list[GraphEvent]
+    repo: TaskRepository,
+    due: date,
+    due_time: str,
+    calendar_events: list[GraphEvent],
 ) -> bool:
-    if _find_local_at_slot(session, due, due_time):
+    if repo.find_at_slot(due, due_time):
         return False
     slot_start, slot_end = _slot_to_utc_range(due, due_time)
     if events_overlapping(calendar_events, slot_start, slot_end):
@@ -106,7 +105,7 @@ def _is_slot_free(
 
 
 def compute_alternatives(
-    session: Session,
+    repo: TaskRepository,
     due: date,
     due_time: str,
     *,
@@ -122,7 +121,7 @@ def compute_alternatives(
         if key in seen:
             continue
         seen.add(key)
-        if not _is_slot_free(session, cand_date, cand_time, events):
+        if not _is_slot_free(repo, cand_date, cand_time, events):
             continue
         free.append(AssistantAlternative(due=cand_date, due_time=cand_time))
         if len(free) >= max_alternatives:
@@ -137,7 +136,7 @@ def _local_tasks_to_conflict(tasks: list[Task]) -> list[AssistantConflictTask]:
             continue
         out.append(
             AssistantConflictTask(
-                id=f"taskflow:{t.id or 0}",
+                id=f"taskflow:{t.id}",
                 title=t.title,
                 due=t.due,
                 due_time=t.due_time,
@@ -166,7 +165,7 @@ def _outlook_events_to_conflict(
 
 
 async def check_conflict(
-    session: Session,
+    repo: TaskRepository,
     due: date | None,
     due_time: str | None,
     *,
@@ -179,7 +178,7 @@ async def check_conflict(
     if due is None or not due_time:
         return None
 
-    local_conflicts = _find_local_at_slot(session, due, due_time)
+    local_conflicts = repo.find_at_slot(due, due_time)
 
     calendar_events: list[GraphEvent] = []
     overlapping: list[GraphEvent] = []
@@ -199,6 +198,6 @@ async def check_conflict(
         overlapping
     )
     alternatives = compute_alternatives(
-        session, due, due_time, calendar_events=calendar_events
+        repo, due, due_time, calendar_events=calendar_events
     )
     return AssistantConflict(conflicts=conflicts, alternatives=alternatives)

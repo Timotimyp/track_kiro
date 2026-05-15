@@ -7,7 +7,9 @@ filters, and modal flow.
 
 The project is split into two services:
 
-- `backend/` — FastAPI + SQLite (via SQLModel) REST API.
+- `backend/` — FastAPI REST API backed by **Azure Cosmos DB** (NoSQL
+  Core API). Falls back to an in-memory store when Cosmos is not
+  configured, so local dev and tests work with no Azure account.
 - `frontend/` — React + Vite + TypeScript SPA.
 
 There is no authentication yet — the API is open and the UI assumes
@@ -26,8 +28,13 @@ uv sync
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-The first launch creates `backend/taskflow.db` and seeds 8 example
-tasks plus the project/user reference data.
+If `COSMOS_ENDPOINT` is not set, the backend uses an **in-memory** task
+repository — perfect for local hacking. On first launch the store is
+seeded with 8 example tasks plus the project/user reference data.
+The in-memory repo is reset every time the process restarts.
+
+To run against a real Cosmos DB, see
+[Azure Cosmos DB setup](#azure-cosmos-db-setup) below.
 
 Run the test suite:
 
@@ -70,20 +77,109 @@ npm run build
 
 ```
 {
-  id: int,
+  id: str,                // UUIDv4 hex (Cosmos document id)
   title: str,
   desc: str,
   status: "todo" | "inprog" | "done",
   priority: "high" | "medium" | "low",
   tag: "dev" | "design" | "qa" | "pm",
-  assignee: str,        // user code, e.g. "AK"
+  assignee: str,          // user code, e.g. "AK"
   due: date | null,
-  due_time: str | null, // optional "HH:MM" (24-hour)
-  proj: str,            // project name
+  due_time: str | null,   // optional "HH:MM" (24-hour)
+  proj: str,              // project name (also the partition key)
   created_at: datetime,
   updated_at: datetime
 }
 ```
+
+> **Breaking change vs. the legacy SQLite version:** `id` is now a
+> string instead of an integer. Cosmos DB requires string document
+> ids; we use `uuid.uuid4().hex`.
+
+## Azure Cosmos DB setup
+
+The backend uses the **Cosmos DB NoSQL (Core) API**. Tasks are stored
+as JSON documents in a single container partitioned by `/proj`
+(project name) — the natural shard for this app since most queries
+are scoped to a project.
+
+### Create the account
+
+```bash
+RG=taskflow-rg
+LOCATION=westeurope
+ACCOUNT=taskflow-cosmos-$RANDOM
+
+az group create -n $RG -l $LOCATION
+
+az cosmosdb create \
+  -g $RG \
+  -n $ACCOUNT \
+  --kind GlobalDocumentDB \
+  --locations regionName=$LOCATION failoverPriority=0 isZoneRedundant=False \
+  --default-consistency-level Session
+
+# Database + container are also auto-created on first launch by the
+# backend, but you can pre-create them:
+az cosmosdb sql database create -g $RG -a $ACCOUNT -n taskflow
+az cosmosdb sql container create -g $RG -a $ACCOUNT -d taskflow \
+  -n tasks --partition-key-path "/proj" --throughput 400
+```
+
+### Configure the backend
+
+Two auth modes are supported:
+
+**Option A — Primary key (simplest, good for local dev):**
+
+```bash
+ENDPOINT=$(az cosmosdb show -g $RG -n $ACCOUNT --query documentEndpoint -o tsv)
+KEY=$(az cosmosdb keys list -g $RG -n $ACCOUNT --query primaryMasterKey -o tsv)
+
+export COSMOS_ENDPOINT="$ENDPOINT"
+export COSMOS_KEY="$KEY"
+export COSMOS_DATABASE=taskflow      # optional, default "taskflow"
+export COSMOS_CONTAINER=tasks        # optional, default "tasks"
+
+uv run uvicorn app.main:app --reload --port 8000
+```
+
+**Option B — Microsoft Entra ID (recommended for production):**
+
+When the backend runs in Azure Container Apps with a managed identity
+(or any environment where `DefaultAzureCredential` resolves), set:
+
+```bash
+export COSMOS_ENDPOINT="https://<account>.documents.azure.com:443/"
+export COSMOS_USE_AAD=1
+```
+
+Grant the identity the **Cosmos DB Built-in Data Contributor** role on
+the account:
+
+```bash
+PRINCIPAL_ID=<managed-identity-principal-id>
+az cosmosdb sql role assignment create \
+  -g $RG -a $ACCOUNT \
+  --role-definition-id 00000000-0000-0000-0000-000000000002 \
+  --principal-id $PRINCIPAL_ID \
+  --scope "/"
+```
+
+No keys live in environment variables this way — auth is via federated
+identity tokens.
+
+### Local development without Cosmos
+
+If neither `COSMOS_ENDPOINT` nor `COSMOS_USE_AAD` is set, the backend
+falls back to `InMemoryTaskRepository`. You'll see a log line like:
+
+```
+WARNING  Using InMemoryTaskRepository — set COSMOS_ENDPOINT + COSMOS_KEY (or COSMOS_USE_AAD=1) to enable Azure Cosmos DB.
+```
+
+This is intentional: tests and quick local runs don't need an Azure
+account, and the API surface is identical.
 
 ## Feature parity with the demo
 
@@ -134,7 +230,7 @@ Gemini with a strict JSON schema and returns:
     ...
   },
   "conflict": null | {
-    "conflicts": [{"id": int, "title": str, "due": "YYYY-MM-DD", "due_time": "HH:MM"}],
+    "conflicts": [{"id": str, "title": str, "due": "YYYY-MM-DD", "due_time": "HH:MM"}],
     "alternatives": [{"due": "YYYY-MM-DD", "due_time": "HH:MM"}]
   }
 }
@@ -147,16 +243,18 @@ suggestion plus a recommendation banner — the user reviews and clicks
 ### Schedule-conflict detection
 
 After Gemini returns a candidate task with both a date and a time, the
-backend queries the local DB for any existing task that occupies the
+backend queries the task store for any existing task that occupies the
 same `due` + `due_time` slot (exact HH:MM match — tasks have no
-duration). If a clash is found, the response carries a `conflict`
-block with up to 3 deterministically-computed free alternatives
-(`+1h`, `-1h`, `+2h`, `-2h`, next day same time, …). The modal shows
-an ⚠️ banner with the conflicting task(s) and a row of pill buttons
-— clicking one replaces the form's date+time. The user can also press
-"Игнорировать и сохранить как есть" to keep the original slot.
+duration). With Cosmos DB this is a parameterised SQL query against the
+container; with the in-memory repo it's a Python filter. If a clash is
+found, the response carries a `conflict` block with up to 3
+deterministically-computed free alternatives (`+1h`, `-1h`, `+2h`,
+`-2h`, next day same time, …). The modal shows an ⚠️ banner with the
+conflicting task(s) and a row of pill buttons — clicking one replaces
+the form's date+time. The user can also press "Игнорировать и
+сохранить как есть" to keep the original slot.
 
-To enable it, export your key before starting the backend:
+To enable Gemini, export your key before starting the backend:
 
 ```bash
 export GEMINI_API_KEY=...   # https://aistudio.google.com/apikey
@@ -184,7 +282,10 @@ when Azure isn't configured.
              ▼            ▼
    FastAPI backend ──────► Microsoft Graph
    (/api/assistant)        /me/calendarView
-                           /me/events
+        │                  /me/events
+        │
+        └────────────────► Azure Cosmos DB (NoSQL Core API)
+                           container: tasks, partition key: /proj
 ```
 
 A single **App Registration** in Microsoft Entra ID provides the
@@ -268,7 +369,8 @@ The repo ships with `.github/workflows/deploy.yml`. On every push to
    Static Web Apps** (free tier).
 2. Builds a Docker image from `backend/Dockerfile`, pushes to **Azure
    Container Registry**, and `az containerapp update`s the running
-   **Azure Container App** with the new image.
+   **Azure Container App** with the new image, wiring up the Cosmos
+   DB env vars.
 
 OIDC federated identity is used for auth — no publish profiles or
 service principal secrets in the repo. Required GitHub secrets and
@@ -281,6 +383,12 @@ RG=taskflow-rg
 LOCATION=westeurope
 
 az group create -n $RG -l $LOCATION
+
+# Cosmos DB (see "Azure Cosmos DB setup" above for details)
+az cosmosdb create -g $RG -n taskflow-cosmos-$RANDOM \
+  --kind GlobalDocumentDB \
+  --locations regionName=$LOCATION failoverPriority=0 isZoneRedundant=False \
+  --default-consistency-level Session
 
 # Backend
 az acr create -n taskflowacr$RANDOM -g $RG --sku Basic --admin-enabled true

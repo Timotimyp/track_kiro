@@ -151,7 +151,7 @@ function App() {
 
   async function handleSave(
     data: TaskInput,
-    id: number | null,
+    id: string | null,
     opts: { addToOutlook?: boolean } = {},
   ) {
     try {

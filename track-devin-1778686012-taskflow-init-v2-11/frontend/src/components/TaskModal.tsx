@@ -13,7 +13,7 @@ interface TaskModalProps {
   onClose: () => void
   onSave: (
     data: TaskInput,
-    id: number | null,
+    id: string | null,
     opts?: { addToOutlook?: boolean },
   ) => Promise<void> | void
 }

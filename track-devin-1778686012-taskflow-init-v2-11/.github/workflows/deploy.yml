@@ -15,6 +15,8 @@ name: Deploy to Azure
 #   AZURE_CONTAINER_REGISTRY   – ACR login server (e.g. taskflowacr.azurecr.io)
 #   AZURE_CONTAINER_IMAGE      – Image name in ACR (e.g. taskflow-backend)
 #   GEMINI_API_KEY             – Forwarded to the running container
+#   COSMOS_ENDPOINT            – e.g. https://<account>.documents.azure.com:443/
+#   COSMOS_KEY                 – Cosmos DB primary key (omit if using AAD)
 # Required GitHub repository variables (vars):
 #   VITE_AZURE_CLIENT_ID       – Public Entra App registration ID for the SPA
 #   VITE_AZURE_TENANT_ID       – Tenant ID (or "common")
@@ -88,4 +90,9 @@ jobs:
             --name "${{ secrets.AZURE_CONTAINER_APP_NAME }}" \
             --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
             --image "$IMAGE" \
-            --set-env-vars GEMINI_API_KEY=secretref:gemini-api-key
+            --set-env-vars \
+              GEMINI_API_KEY=secretref:gemini-api-key \
+              COSMOS_ENDPOINT=secretref:cosmos-endpoint \
+              COSMOS_KEY=secretref:cosmos-key \
+              COSMOS_DATABASE=taskflow \
+              COSMOS_CONTAINER=tasks

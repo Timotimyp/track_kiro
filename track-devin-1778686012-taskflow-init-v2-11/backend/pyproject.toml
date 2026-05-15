@@ -1,13 +1,15 @@
 [project]
 name = "taskflow-backend"
 version = "0.1.0"
-description = "TaskFlow REST API (FastAPI + SQLite + SQLModel)"
+description = "TaskFlow REST API (FastAPI + Azure Cosmos DB)"
 requires-python = ">=3.12"
 dependencies = [
+    "azure-cosmos>=4.7.0",
+    "azure-identity>=1.19.0",
     "fastapi>=0.136.1",
     "httpx>=0.28.1",
+    "pydantic>=2.7",
     "pydantic-settings>=2.14.1",
-    "sqlmodel>=0.0.38",
     "uvicorn>=0.46.0",
 ]
 

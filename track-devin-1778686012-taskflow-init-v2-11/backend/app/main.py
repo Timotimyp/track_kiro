@@ -8,7 +8,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlmodel import Session, select
 
 from app.assistant import (
     AssistantError,
@@ -17,8 +16,6 @@ from app.assistant import (
     interpret_command,
 )
 from app.conflicts import check_conflict
-from app.db import engine, get_session, init_db
-from app.graph import create_calendar_event
 from app.models import (
     Project,
     Task,
@@ -27,23 +24,22 @@ from app.models import (
     TaskUpdate,
     User,
 )
+from app.repository import TaskRepository, get_repository
 from app.seed import PROJECTS, USERS, build_seed_tasks
 
 
-def seed_if_empty() -> None:
-    with Session(engine) as session:
-        existing = session.exec(select(Task)).first()
-        if existing is not None:
-            return
-        for task in build_seed_tasks():
-            session.add(task)
-        session.commit()
+def seed_if_empty(repo: TaskRepository) -> None:
+    """Populate the repository with example tasks on first launch."""
+    if not repo.is_empty():
+        return
+    for task in build_seed_tasks():
+        repo.add_task(task)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    init_db()
-    seed_if_empty()
+    repo = get_repository()
+    seed_if_empty(repo)
     yield
 
 
@@ -62,6 +58,11 @@ app.add_middleware(
 )
 
 
+def get_repo() -> TaskRepository:
+    """FastAPI dependency that returns the singleton task repository."""
+    return get_repository()
+
+
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -78,8 +79,8 @@ def list_users() -> list[User]:
 
 
 @app.get("/api/tasks", response_model=list[TaskRead])
-def list_tasks(session: Session = Depends(get_session)) -> list[Task]:
-    return list(session.exec(select(Task).order_by(Task.id)).all())
+def list_tasks(repo: TaskRepository = Depends(get_repo)) -> list[Task]:
+    return repo.list_tasks()
 
 
 def _extract_bearer(authorization: str | None) -> str | None:
@@ -109,7 +110,7 @@ def _resolve_timezone(name: str | None) -> tuple[ZoneInfo, str]:
 @app.post("/api/tasks", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
 async def create_task(
     payload: TaskCreate,
-    session: Session = Depends(get_session),
+    repo: TaskRepository = Depends(get_repo),
     add_to_outlook: bool = False,
     tz: str | None = None,
     authorization: str | None = Header(default=None),
@@ -127,10 +128,11 @@ async def create_task(
     response's `outlook_event_id` field carries Graph's event ID so the UI
     can confirm the sync happened.
     """
+    # Import locally to avoid a circular import via app.graph -> app.models.
+    from app.graph import create_calendar_event
+
     task = Task(**payload.model_dump())
-    session.add(task)
-    session.commit()
-    session.refresh(task)
+    repo.add_task(task)
 
     outlook_event_id: str | None = None
     if add_to_outlook and task.due is not None and task.due_time:
@@ -158,8 +160,8 @@ async def create_task(
 
 
 @app.get("/api/tasks/{task_id}", response_model=TaskRead)
-def get_task(task_id: int, session: Session = Depends(get_session)) -> Task:
-    task = session.get(Task, task_id)
+def get_task(task_id: str, repo: TaskRepository = Depends(get_repo)) -> Task:
+    task = repo.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
@@ -167,34 +169,32 @@ def get_task(task_id: int, session: Session = Depends(get_session)) -> Task:
 
 @app.patch("/api/tasks/{task_id}", response_model=TaskRead)
 def update_task(
-    task_id: int, payload: TaskUpdate, session: Session = Depends(get_session)
+    task_id: str,
+    payload: TaskUpdate,
+    repo: TaskRepository = Depends(get_repo),
 ) -> Task:
-    task = session.get(Task, task_id)
+    task = repo.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     data = payload.model_dump(exclude_unset=True)
-    for key, value in data.items():
-        setattr(task, key, value)
-    task.updated_at = datetime.now(UTC).replace(tzinfo=None)
-    session.add(task)
-    session.commit()
-    session.refresh(task)
-    return task
+    updated = task.model_copy(
+        update={**data, "updated_at": datetime.now(UTC).replace(tzinfo=None)}
+    )
+    repo.update_task(updated)
+    return updated
 
 
 @app.delete("/api/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(task_id: int, session: Session = Depends(get_session)) -> None:
-    task = session.get(Task, task_id)
-    if not task:
+def delete_task(task_id: str, repo: TaskRepository = Depends(get_repo)) -> None:
+    deleted = repo.delete_task(task_id)
+    if not deleted:
         raise HTTPException(status_code=404, detail="Task not found")
-    session.delete(task)
-    session.commit()
 
 
 @app.post("/api/assistant", response_model=AssistantResponse)
 async def assistant(
     request: AssistantRequest,
-    session: Session = Depends(get_session),
+    repo: TaskRepository = Depends(get_repo),
     authorization: str | None = Header(default=None),
 ) -> AssistantResponse:
     """Parse a free-form voice/text command into a structured task suggestion.
@@ -212,7 +212,7 @@ async def assistant(
     except AssistantError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     response.conflict = await check_conflict(
-        session,
+        repo,
         response.task.due,
         response.task.due_time,
         access_token=_extract_bearer(authorization),

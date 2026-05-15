@@ -58,9 +58,9 @@ export const api = {
       token: opts.token ?? null,
     })
   },
-  updateTask: (id: number, payload: Partial<TaskInput>) =>
+  updateTask: (id: string, payload: Partial<TaskInput>) =>
     request<Task>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
-  deleteTask: (id: number) => request<void>(`/tasks/${id}`, { method: 'DELETE' }),
+  deleteTask: (id: string) => request<void>(`/tasks/${id}`, { method: 'DELETE' }),
   askAssistant: (text: string, language: AssistantLanguage, token?: string | null) =>
     request<AssistantResponse>('/assistant', {
       method: 'POST',
