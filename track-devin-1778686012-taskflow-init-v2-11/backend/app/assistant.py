@@ -34,7 +34,7 @@ GEMINI_TIMEOUT = 20.0
 # ---------------------------------------------------------------------------
 # Azure OpenAI config
 # ---------------------------------------------------------------------------
-AZURE_OPENAI_API_VERSION = "2024-10-21"
+AZURE_OPENAI_API_VERSION = "2024-08-01-preview"
 AZURE_OPENAI_TIMEOUT = 60.0
 
 
