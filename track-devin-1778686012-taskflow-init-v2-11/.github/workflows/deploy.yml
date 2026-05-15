@@ -85,6 +85,11 @@ jobs:
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
       - name: Update Container App
+        # IMPORTANT: --set-env-vars REPLACES the entire env list. Every var
+        # the backend needs must be listed here, otherwise it gets wiped on
+        # the next deploy. Secret values are pulled from Container App
+        # secrets (set out-of-band via `az containerapp secret set ...`),
+        # so the workflow itself never handles raw keys.
         run: |
           az containerapp update \
             --name "${{ secrets.AZURE_CONTAINER_APP_NAME }}" \
@@ -95,4 +100,7 @@ jobs:
               COSMOS_ENDPOINT=secretref:cosmos-endpoint \
               COSMOS_KEY=secretref:cosmos-key \
               COSMOS_DATABASE=taskflow \
-              COSMOS_CONTAINER=tasks
+              COSMOS_CONTAINER=tasks \
+              AZURE_OPENAI_ENDPOINT=secretref:azure-openai-endpoint \
+              AZURE_OPENAI_API_KEY=secretref:azure-openai-key \
+              AZURE_OPENAI_DEPLOYMENT=secretref:azure-openai-deployment
