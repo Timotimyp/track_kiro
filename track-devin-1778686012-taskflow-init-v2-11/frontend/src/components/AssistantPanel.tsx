@@ -231,12 +231,17 @@ export function AssistantPanel({
             disabled={!supported || status === 'thinking'}
             aria-pressed={status === 'listening'}
           >
-            <span className="assistant-record-dot" />
+            {status !== 'thinking' && <span className="assistant-record-dot" />}
             {status === 'listening' ? t.stop : t.record}
           </button>
           <div className="assistant-status">
             {status === 'listening' && <span className="assistant-status-pulse">{t.listening}</span>}
-            {status === 'thinking' && <span>{t.thinking}</span>}
+            {status === 'thinking' && (
+              <span className="assistant-status-thinking">
+                <span className="assistant-spinner-sm" aria-hidden />
+                {t.thinking}
+              </span>
+            )}
             {status === 'idle' && supported && <span className="assistant-status-hint">{TIPS[language]}</span>}
             {!supported && <span className="assistant-status-error">{t.noMic}</span>}
           </div>
