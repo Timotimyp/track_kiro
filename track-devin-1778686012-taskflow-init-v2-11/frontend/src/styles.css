@@ -260,3 +260,199 @@ button{font-family:inherit}
 .login-btn:hover:not(:disabled){background:#106ebe;border-color:#106ebe}
 .login-btn:disabled{opacity:.5;cursor:not-allowed}
 .login-hint{font-size:12px;color:var(--text3);margin-top:16px}
+
+
+
+/* ============================================================ */
+/* Mobile / responsive (≤ 768px)                                 */
+/* ============================================================ */
+@media (max-width: 768px) {
+  /* Stack sidebar on top of main as a horizontal nav row */
+  .app {
+    flex-direction: column;
+    height: 100vh;
+    overflow: auto;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  /* Logo row stays compact */
+  .sidebar-logo {
+    padding: 12px 14px 10px;
+  }
+  .logo-name { font-size: 14px; }
+  .logo-sub { font-size: 10px; }
+
+  /* Turn nav items into a horizontal scrollable strip */
+  .nav-section,
+  .sidebar-projects {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+    padding: 6px 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .nav-section::-webkit-scrollbar,
+  .sidebar-projects::-webkit-scrollbar {
+    display: none;
+  }
+  .nav-label {
+    display: none; /* hide section headers on mobile */
+  }
+  .nav-item, .proj-item {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 6px 12px;
+    border-radius: 99px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    font-size: 12.5px;
+  }
+  .nav-item.active, .proj-item.active {
+    background: var(--accent-bg);
+    border-color: var(--accent-border);
+  }
+  .nav-badge {
+    margin-left: 6px;
+    font-size: 9px;
+    padding: 1px 5px;
+  }
+
+  /* User panel — make it look natural when stacked */
+  .sidebar-bottom {
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 12px;
+  }
+  .user-row { padding: 4px 8px; }
+
+  .main {
+    flex: 1 0 auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  /* Topbar — wrap and shrink */
+  .topbar {
+    height: auto;
+    min-height: 56px;
+    padding: 10px 14px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .topbar-title {
+    font-size: 15px;
+    flex: 1 1 100%;
+    margin-bottom: 4px;
+  }
+  .search-box {
+    flex: 1 1 100%;
+    min-width: 0;
+    order: 1;
+  }
+  .topbar-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  /* Hide text labels on the smallest buttons, keep icons/emojis */
+  .btn-ghost { font-size: 12px; }
+
+  .ms-name { max-width: 90px; }
+
+  .content {
+    padding: 14px;
+    overflow: visible;
+  }
+
+  /* Stats: 2 columns instead of 4 */
+  .stats-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .stat-card { padding: 12px 14px; }
+  .stat-num { font-size: 22px; }
+  .stat-lbl { font-size: 11px; }
+
+  .prog-section { padding: 14px 16px; margin-bottom: 16px; }
+  .prog-labels { gap: 12px; flex-wrap: wrap; }
+
+  /* Filters — wrap, smaller padding */
+  .filters-row { gap: 6px; }
+  .filter-btn { padding: 4px 10px; font-size: 11px; }
+  .filters-right { width: 100%; margin-left: 0; }
+
+  /* TASK TABLE → card list on mobile.
+     The original layout uses CSS grid with 7 fixed columns; we collapse
+     each row into a 2-column grid (checkbox | content) and let badges
+     wrap. Renders the rest as a vertical card. */
+  .table-head {
+    display: none; /* the column headers don't make sense in card mode */
+  }
+  .task-row {
+    grid-template-columns: 28px 1fr;
+    grid-template-areas:
+      "check title"
+      "check meta"
+      "check badges"
+      "check footer";
+    gap: 6px 12px;
+    padding: 12px 14px;
+    align-items: start;
+  }
+  .task-row > .chkbox { grid-area: check; align-self: center; }
+  .task-row > :nth-child(2) { grid-area: title; }   /* task name + project */
+  .task-row > :nth-child(3) { grid-area: badges; }  /* category */
+  .task-row > :nth-child(4) { grid-area: badges; }  /* priority */
+  .task-row > :nth-child(5) { grid-area: meta; }    /* assignee */
+  .task-row > :nth-child(6) { grid-area: meta; }    /* due */
+  .task-row > :nth-child(7) { grid-area: footer; justify-self: end; }
+  .row-actions { opacity: 1; } /* always visible — no hover on touch */
+  .task-name { white-space: normal; overflow: visible; text-overflow: clip; }
+
+  /* Modal — fullscreen on mobile */
+  .modal-bg { padding: 0; align-items: flex-end; }
+  .modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 95vh;
+    overflow-y: auto;
+    border-radius: 14px 14px 0 0;
+    padding: 20px 18px;
+    animation: slideUpMobile .25s ease;
+  }
+  @keyframes slideUpMobile {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .form-row {
+    grid-template-columns: 1fr; /* stack form fields vertically */
+  }
+
+  /* Assistant modal — same fullscreen treatment */
+  .assistant-modal { width: 100%; max-width: 100%; }
+  .assistant-record-row { flex-wrap: wrap; }
+  .assistant-status { flex: 1 1 100%; }
+  .assistant-conflict-alts { padding-left: 0; }
+  .assistant-conflict-dismiss { margin-left: 0; }
+
+  /* Toast — full width at the bottom */
+  .toast { left: 14px; right: 14px; bottom: 14px; }
+}
+
+/* Smallest screens (≤ 480px) — squeeze stats to 1 column */
+@media (max-width: 480px) {
+  .stats-row { grid-template-columns: 1fr; }
+  .modal { padding: 18px 14px; }
+  .login-card { padding: 28px 22px; }
+}
