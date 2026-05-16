@@ -260,7 +260,10 @@ async def _call_azure_openai(
         ],
         "response_format": {"type": "json_object"},
         "temperature": 0.2,
-        "max_tokens": 1000,
+        # Newer reasoning models (gpt-5.x, o1, o3) use max_completion_tokens
+        # instead of max_tokens. Send both — Azure ignores the unknown one
+        # depending on the model version.
+        "max_completion_tokens": 1000,
     }
 
     if http_client is None:
