@@ -501,32 +501,65 @@ button{font-family:inherit}
     flex-shrink: 0;
   }
 
-  /* Task table → card list on mobile */
+  /* Task table → card list on mobile.
+     The TaskTable renders 7 direct children inside each .task-row:
+       1. .chkbox                   (checkbox)
+       2. div with .task-name       (title + project)
+       3. div with category badge
+       4. div with priority badge
+       5. div with status dot/label
+       6. .assignee-cell            (avatar + code)
+       7. .due-cell                 (due date + actions)
+
+     Trick: switch the row from CSS Grid to plain Flexbox column layout.
+     Then we can re-order siblings with `order:` and group badges /
+     status visually with negative margins or extra wrappers — much
+     less brittle than nth-child(N) into grid-areas. */
   .table-head { display: none; }
   .task-row {
-    grid-template-columns: 28px 1fr;
-    grid-template-areas:
-      "check title"
-      ".     meta"
-      ".     badges"
-      ".     footer";
-    gap: 6px 12px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 8px 10px;
     padding: 14px 14px;
-    align-items: start;
   }
-  .task-row > .chkbox { grid-area: check; align-self: center; }
-  .task-row > :nth-child(2) { grid-area: title; }
-  .task-row > :nth-child(3) { grid-area: badges; }
-  .task-row > :nth-child(4) { grid-area: badges; }
-  .task-row > :nth-child(5) { grid-area: meta; }
-  .task-row > :nth-child(6) { grid-area: meta; }
-  .task-row > :nth-child(7) { grid-area: footer; justify-self: end; }
+  /* Checkbox on the left, full title takes the rest of the first row */
+  .task-row > .chkbox        { order: 0; flex-shrink: 0; align-self: flex-start; margin-top: 2px; }
+  .task-row > *:nth-child(2) { order: 1; flex: 1 1 calc(100% - 38px); min-width: 0; }
+  /* Both badges go on the next row, side-by-side */
+  .task-row > *:nth-child(3) { order: 2; flex: 0 0 auto; margin-left: 38px; }
+  .task-row > *:nth-child(4) { order: 3; flex: 0 0 auto; }
+  /* Status indicator goes after, aligned with badges */
+  .task-row > *:nth-child(5) { order: 4; flex: 0 0 auto; }
+  /* Spacer pushes assignee to the right of the same row when there's space */
+  .task-row > *:nth-child(6) { order: 5; flex: 0 0 auto; margin-left: auto; }
+  /* Due-date row spans full width */
+  .task-row > *:nth-child(7) {
+    order: 6;
+    flex: 1 1 100%;
+    margin-left: 38px;
+    margin-top: 4px;
+  }
   .row-actions { opacity: 1; }
   .task-name {
     white-space: normal;
     overflow: visible;
     text-overflow: clip;
     font-size: 15px;
+    line-height: 1.35;
+    font-weight: 500;
+  }
+  .task-proj { font-size: 12px; }
+  .due-cell {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+  .act-btn {
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
   }
 
   /* Modal as bottom-sheet */
