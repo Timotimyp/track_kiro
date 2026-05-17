@@ -571,14 +571,31 @@ button{font-family:inherit}
   .modal {
     width: 100%;
     max-width: 100%;
-    max-height: 92vh;
+    /* Cap height aggressively so the user never has to zoom out to see
+       the action buttons — including iPhone notch / home indicator. */
+    max-height: calc(100vh - 40px);
+    max-height: calc(100dvh - 40px);
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     border-radius: 18px 18px 0 0;
-    padding: 22px 18px calc(22px + env(safe-area-inset-bottom)) 18px;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom)) 16px;
     animation: slideUpMobile .28s cubic-bezier(.4,0,.2,1);
     border-bottom: none;
     border-left: none;
     border-right: none;
+  }
+  .modal-header {
+    margin-bottom: 14px;
+  }
+  .modal-title {
+    font-size: 17px;
+  }
+  .form-group {
+    margin-bottom: 12px;
+  }
+  .form-label {
+    margin-bottom: 4px;
+    font-size: 11.5px;
   }
   /* Drag-handle at the top of the bottom sheet for native feel */
   .modal::before {
@@ -588,20 +605,25 @@ button{font-family:inherit}
     height: 4px;
     background: var(--border2);
     border-radius: 2px;
-    margin: -8px auto 14px;
+    margin: -4px auto 12px;
+    flex-shrink: 0;
   }
   @keyframes slideUpMobile {
     from { transform: translateY(100%); }
     to { transform: translateY(0); }
   }
-  .form-row { grid-template-columns: 1fr; }
+  .form-row { grid-template-columns: 1fr; gap: 10px; }
   .form-input {
-    padding: 12px 14px;
-    font-size: 15px; /* prevents iOS auto-zoom on focus */
+    padding: 10px 12px;
+    font-size: 16px; /* iOS won't auto-zoom only if ≥ 16px */
+  }
+  textarea.form-input {
+    min-height: 60px;
   }
   .modal-actions {
     flex-direction: column-reverse;
-    gap: 10px;
+    gap: 8px;
+    margin-top: 14px;
   }
   .modal-actions > button {
     width: 100%;
@@ -671,6 +693,7 @@ button{font-family:inherit}
 /* Smallest screens (≤ 480px) — squeeze stats to 1 column */
 @media (max-width: 480px) {
   .stats-row { grid-template-columns: 1fr; }
-  .modal { padding: 20px 14px calc(20px + env(safe-area-inset-bottom)) 14px; }
+  .modal { padding: 14px 12px calc(14px + env(safe-area-inset-bottom)) 12px; }
+  .modal-actions > button { padding: 11px; font-size: 14.5px; }
   .login-card { padding: 28px 20px; }
 }

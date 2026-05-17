@@ -144,8 +144,13 @@ function App() {
 
   const title = VIEW_TITLES[view] ?? view
 
+  // Tasks visible in the current view (e.g. only this project / only mytasks).
+  // We use this as the "All" count in the filter chip — without this the
+  // chip showed the global task total even when the user was inside a
+  // project that contained none of those tasks.
+  const viewTasks = applyView(tasks, view)
   const filteredTasks = applySort(
-    applySearch(applyFilter(applyView(tasks, view), filter), search),
+    applySearch(applyFilter(viewTasks, filter), search),
     sort,
   )
 
@@ -310,7 +315,7 @@ function App() {
           ) : (
             <TaskTable
               tasks={filteredTasks}
-              totalCount={tasks.length}
+              totalCount={viewTasks.length}
               showFilters
               filter={filter}
               onFilterChange={setFilter}
