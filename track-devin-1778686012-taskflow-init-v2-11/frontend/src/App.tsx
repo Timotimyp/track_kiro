@@ -74,6 +74,7 @@ function App() {
     conflict: AssistantConflict | null
   } | null>(null)
   const [assistantOpen, setAssistantOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [toast, setToast] = useState<ToastState | null>(null)
   const toastTimer = useRef<number | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -152,6 +153,7 @@ function App() {
     setView(next)
     setFilter('all')
     setSort('')
+    setMobileMenuOpen(false)
   }
 
   function openCreate() {
@@ -283,7 +285,10 @@ function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app ${mobileMenuOpen ? 'menu-open' : ''}`}>
+      {mobileMenuOpen && (
+        <div className="mobile-overlay" onClick={() => setMobileMenuOpen(false)} />
+      )}
       <Sidebar view={view} tasks={tasks} projects={projects} onSelect={selectView} />
       <div className="main">
         <Topbar
@@ -294,6 +299,7 @@ function App() {
           onExport={handleExport}
           onNewTask={openCreate}
           onOpenAssistant={() => setAssistantOpen(true)}
+          onToggleMenu={() => setMobileMenuOpen((v) => !v)}
           ms={ms}
         />
         <div className="content">
@@ -339,6 +345,10 @@ function App() {
           msSignedIn={ms.isSignedIn}
         />
       )}
+      {/* Mobile FAB — quick access to "new task" with thumb. Hidden on desktop via CSS. */}
+      <button className="fab fab-new" onClick={openCreate} aria-label="New task">
+        +
+      </button>
       <Toast message={toast?.message ?? null} variant={toast?.variant} />
     </div>
   )

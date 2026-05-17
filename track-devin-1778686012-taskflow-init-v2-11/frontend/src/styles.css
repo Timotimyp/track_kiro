@@ -264,195 +264,380 @@ button{font-family:inherit}
 
 
 /* ============================================================ */
-/* Mobile / responsive (≤ 768px)                                 */
+/* Mobile / responsive (≤ 768px) — proper native-feel layout    */
 /* ============================================================ */
+
+/* Burger button — visible only on mobile */
+.topbar-burger {
+  display: none;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.topbar-burger:active { background: var(--surface2); }
+.topbar-burger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: var(--text);
+  border-radius: 2px;
+  transition: transform .2s, opacity .2s;
+}
+.app.menu-open .topbar-burger span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.app.menu-open .topbar-burger span:nth-child(2) { opacity: 0; }
+.app.menu-open .topbar-burger span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* Mobile dim overlay behind drawer */
+.mobile-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  z-index: 90;
+  animation: fadeIn .2s ease;
+}
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+
+/* Floating Action Button — primary action on mobile (new task) */
+.fab {
+  display: none;
+  position: fixed;
+  bottom: 24px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(124, 106, 247, .45), 0 2px 8px rgba(0,0,0,.4);
+  z-index: 50;
+  transition: transform .15s, box-shadow .15s;
+  font-family: inherit;
+}
+.fab:active {
+  transform: scale(.92);
+  box-shadow: 0 3px 12px rgba(124, 106, 247, .5);
+}
+
 @media (max-width: 768px) {
-  /* Stack sidebar on top of main as a horizontal nav row */
+  /* Show mobile-only controls */
+  .topbar-burger { display: flex; }
+  .mobile-overlay { display: block; }
+  .fab { display: flex; align-items: center; justify-content: center; }
+
+  /* Layout: keep flex-row, but sidebar becomes a slide-out drawer */
   .app {
-    flex-direction: column;
+    flex-direction: row;
     height: 100vh;
-    overflow: auto;
+    overflow: hidden;
+    position: relative;
   }
 
   .sidebar {
-    width: 100%;
-    height: auto;
-    max-height: none;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 80%;
+    max-width: 300px;
+    z-index: 100;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,.4);
+    border-right: 1px solid var(--border);
+    border-bottom: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .app.menu-open .sidebar {
+    transform: translateX(0);
   }
 
-  /* Logo row stays compact */
+  /* Sidebar — restore vertical "native app" look inside the drawer */
   .sidebar-logo {
-    padding: 12px 14px 10px;
+    padding: 18px 16px 14px;
   }
-  .logo-name { font-size: 14px; }
-  .logo-sub { font-size: 10px; }
-
-  /* Turn nav items into a horizontal scrollable strip */
-  .nav-section,
-  .sidebar-projects {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 4px;
-    padding: 6px 8px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .nav-section::-webkit-scrollbar,
-  .sidebar-projects::-webkit-scrollbar {
-    display: none;
+  .nav-section {
+    display: block;
+    padding: 14px 8px 6px;
+    overflow: visible;
   }
   .nav-label {
-    display: none; /* hide section headers on mobile */
+    display: block;
+    font-size: 10px;
+    padding: 0 8px;
+    margin-bottom: 6px;
+  }
+  .sidebar-projects {
+    display: block;
+    padding: 0 8px;
+    overflow: visible;
   }
   .nav-item, .proj-item {
+    display: flex;
+    width: 100%;
     flex-shrink: 0;
-    white-space: nowrap;
-    padding: 6px 12px;
-    border-radius: 99px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    font-size: 12.5px;
+    white-space: normal;
+    padding: 12px 12px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    border: none;
+    font-size: 14.5px;
+    margin-bottom: 2px;
   }
   .nav-item.active, .proj-item.active {
     background: var(--accent-bg);
-    border-color: var(--accent-border);
+    border-color: transparent;
+  }
+  .nav-item:active:not(.active),
+  .proj-item:active:not(.active) {
+    background: var(--surface2);
   }
   .nav-badge {
-    margin-left: 6px;
-    font-size: 9px;
-    padding: 1px 5px;
+    margin-left: auto;
+    font-size: 10px;
+    padding: 2px 7px;
   }
-
-  /* User panel — make it look natural when stacked */
   .sidebar-bottom {
     border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-    padding: 8px 12px;
+    border-bottom: none;
+    padding: 12px 12px;
   }
-  .user-row { padding: 4px 8px; }
+  .user-row {
+    padding: 8px;
+  }
 
   .main {
-    flex: 1 0 auto;
-    min-height: 0;
-    overflow: visible;
+    flex: 1;
+    width: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 
-  /* Topbar — wrap and shrink */
+  /* Topbar — mobile-friendly: burger + title + AI icon. Hide other things. */
   .topbar {
-    height: auto;
+    height: 56px;
     min-height: 56px;
-    padding: 10px 14px;
-    gap: 8px;
-    flex-wrap: wrap;
+    padding: 0 8px 0 4px;
+    gap: 6px;
+    flex-wrap: nowrap;
+    align-items: center;
   }
   .topbar-title {
-    font-size: 15px;
-    flex: 1 1 100%;
-    margin-bottom: 4px;
-  }
-  .search-box {
-    flex: 1 1 100%;
+    font-size: 16px;
+    font-weight: 600;
+    flex: 1 1 auto;
     min-width: 0;
-    order: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .topbar-btn {
-    padding: 6px 10px;
-    font-size: 12px;
+  /* Hide bulky search / sign-in / export / new-task — they have other entry points */
+  .topbar .search-box,
+  .topbar .btn-ms,
+  .topbar .btn-export,
+  .topbar .btn-new {
+    display: none;
   }
-  /* Hide text labels on the smallest buttons, keep icons/emojis */
-  .btn-ghost { font-size: 12px; }
-
-  .ms-name { max-width: 90px; }
+  /* AI button stays — it's primary value */
+  .topbar .btn-assistant {
+    padding: 8px 14px;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
 
   .content {
-    padding: 14px;
+    padding: 14px 14px 90px; /* extra bottom padding so FAB doesn't overlap last item */
     overflow: visible;
   }
 
-  /* Stats: 2 columns instead of 4 */
+  /* Stats: 2 columns, more breathing room */
   .stats-row {
     grid-template-columns: 1fr 1fr;
     gap: 10px;
     margin-bottom: 16px;
   }
-  .stat-card { padding: 12px 14px; }
+  .stat-card { padding: 14px; }
   .stat-num { font-size: 22px; }
   .stat-lbl { font-size: 11px; }
 
   .prog-section { padding: 14px 16px; margin-bottom: 16px; }
   .prog-labels { gap: 12px; flex-wrap: wrap; }
 
-  /* Filters — wrap, smaller padding */
-  .filters-row { gap: 6px; }
-  .filter-btn { padding: 4px 10px; font-size: 11px; }
-  .filters-right { width: 100%; margin-left: 0; }
-
-  /* TASK TABLE → card list on mobile.
-     The original layout uses CSS grid with 7 fixed columns; we collapse
-     each row into a 2-column grid (checkbox | content) and let badges
-     wrap. Renders the rest as a vertical card. */
-  .table-head {
-    display: none; /* the column headers don't make sense in card mode */
+  /* Filters — compact, scrollable horizontally if doesn't fit */
+  .filters-row {
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
   }
+  .filters-row::-webkit-scrollbar { display: none; }
+  .filter-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .filters-right {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  /* Task table → card list on mobile */
+  .table-head { display: none; }
   .task-row {
     grid-template-columns: 28px 1fr;
     grid-template-areas:
       "check title"
-      "check meta"
-      "check badges"
-      "check footer";
+      ".     meta"
+      ".     badges"
+      ".     footer";
     gap: 6px 12px;
-    padding: 12px 14px;
+    padding: 14px 14px;
     align-items: start;
   }
   .task-row > .chkbox { grid-area: check; align-self: center; }
-  .task-row > :nth-child(2) { grid-area: title; }   /* task name + project */
-  .task-row > :nth-child(3) { grid-area: badges; }  /* category */
-  .task-row > :nth-child(4) { grid-area: badges; }  /* priority */
-  .task-row > :nth-child(5) { grid-area: meta; }    /* assignee */
-  .task-row > :nth-child(6) { grid-area: meta; }    /* due */
+  .task-row > :nth-child(2) { grid-area: title; }
+  .task-row > :nth-child(3) { grid-area: badges; }
+  .task-row > :nth-child(4) { grid-area: badges; }
+  .task-row > :nth-child(5) { grid-area: meta; }
+  .task-row > :nth-child(6) { grid-area: meta; }
   .task-row > :nth-child(7) { grid-area: footer; justify-self: end; }
-  .row-actions { opacity: 1; } /* always visible — no hover on touch */
-  .task-name { white-space: normal; overflow: visible; text-overflow: clip; }
+  .row-actions { opacity: 1; }
+  .task-name {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    font-size: 15px;
+  }
 
-  /* Modal — fullscreen on mobile */
-  .modal-bg { padding: 0; align-items: flex-end; }
+  /* Modal as bottom-sheet */
+  .modal-bg {
+    padding: 0;
+    align-items: flex-end;
+    background: rgba(0,0,0,.6);
+  }
   .modal {
     width: 100%;
     max-width: 100%;
-    max-height: 95vh;
+    max-height: 92vh;
     overflow-y: auto;
-    border-radius: 14px 14px 0 0;
-    padding: 20px 18px;
-    animation: slideUpMobile .25s ease;
+    border-radius: 18px 18px 0 0;
+    padding: 22px 18px calc(22px + env(safe-area-inset-bottom)) 18px;
+    animation: slideUpMobile .28s cubic-bezier(.4,0,.2,1);
+    border-bottom: none;
+    border-left: none;
+    border-right: none;
+  }
+  /* Drag-handle at the top of the bottom sheet for native feel */
+  .modal::before {
+    content: "";
+    display: block;
+    width: 40px;
+    height: 4px;
+    background: var(--border2);
+    border-radius: 2px;
+    margin: -8px auto 14px;
   }
   @keyframes slideUpMobile {
     from { transform: translateY(100%); }
     to { transform: translateY(0); }
   }
-  .form-row {
-    grid-template-columns: 1fr; /* stack form fields vertically */
+  .form-row { grid-template-columns: 1fr; }
+  .form-input {
+    padding: 12px 14px;
+    font-size: 15px; /* prevents iOS auto-zoom on focus */
+  }
+  .modal-actions {
+    flex-direction: column-reverse;
+    gap: 10px;
+  }
+  .modal-actions > button {
+    width: 100%;
+    padding: 12px;
+    font-size: 15px;
+    justify-content: center;
   }
 
-  /* Assistant modal — same fullscreen treatment */
+  /* Assistant modal — bigger record button, full-width controls */
   .assistant-modal { width: 100%; max-width: 100%; }
-  .assistant-record-row { flex-wrap: wrap; }
-  .assistant-status { flex: 1 1 100%; }
-  .assistant-conflict-alts { padding-left: 0; }
-  .assistant-conflict-dismiss { margin-left: 0; }
+  .assistant-subtitle { font-size: 13px; line-height: 1.5; }
+  .assistant-lang-row { gap: 8px; }
+  .assistant-lang-btn {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+  .assistant-record-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .assistant-record-btn {
+    padding: 16px 24px;
+    font-size: 16px;
+    justify-content: center;
+    width: 100%;
+  }
+  .assistant-record-dot {
+    width: 12px;
+    height: 12px;
+  }
+  .assistant-status {
+    text-align: center;
+    justify-content: center;
+    flex: 0 0 auto;
+  }
+  .assistant-status-hint {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    font-size: 12.5px;
+    line-height: 1.4;
+  }
+  .assistant-textarea {
+    min-height: 110px;
+    font-size: 15px; /* no iOS zoom */
+    padding: 12px;
+  }
+  .assistant-conflict { gap: 8px; padding: 12px; }
+  .assistant-conflict-alts { padding-left: 0; gap: 6px; }
+  .assistant-conflict-alt { padding: 8px 14px; font-size: 13px; }
+  .assistant-conflict-dismiss { margin-left: 0; padding: 6px 0; font-size: 12px; }
 
-  /* Toast — full width at the bottom */
-  .toast { left: 14px; right: 14px; bottom: 14px; }
+  /* Toast */
+  .toast {
+    left: 14px;
+    right: 14px;
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    justify-content: center;
+  }
+
+  /* Login screen — tighter on mobile */
+  .login-screen { padding: 16px; }
+  .login-card { padding: 32px 22px; }
 }
 
 /* Smallest screens (≤ 480px) — squeeze stats to 1 column */
 @media (max-width: 480px) {
   .stats-row { grid-template-columns: 1fr; }
-  .modal { padding: 18px 14px; }
-  .login-card { padding: 28px 22px; }
+  .modal { padding: 20px 14px calc(20px + env(safe-area-inset-bottom)) 14px; }
+  .login-card { padding: 28px 20px; }
 }

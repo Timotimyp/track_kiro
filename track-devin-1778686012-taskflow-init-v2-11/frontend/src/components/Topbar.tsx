@@ -8,15 +8,27 @@ interface TopbarProps {
   onExport: () => void
   onNewTask: () => void
   onOpenAssistant: () => void
+  onToggleMenu?: () => void
   ms: MicrosoftAuthState
 }
 
 export const Topbar = forwardRef<HTMLInputElement, TopbarProps>(function Topbar(
-  { title, search, onSearchChange, onExport, onNewTask, onOpenAssistant, ms },
+  { title, search, onSearchChange, onExport, onNewTask, onOpenAssistant, onToggleMenu, ms },
   ref,
 ) {
   return (
     <div className="topbar">
+      {onToggleMenu && (
+        <button
+          className="topbar-burger"
+          onClick={onToggleMenu}
+          aria-label="Toggle menu"
+        >
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      )}
       <div className="topbar-title">{title}</div>
       <div className="search-box">
         <span style={{ fontSize: 14, color: 'var(--text3)' }}>🔍</span>
@@ -57,10 +69,10 @@ export const Topbar = forwardRef<HTMLInputElement, TopbarProps>(function Topbar(
       >
         🎙 AI
       </button>
-      <button className="topbar-btn btn-ghost" onClick={onExport}>
+      <button className="topbar-btn btn-ghost btn-export" onClick={onExport}>
         ⬇ Export
       </button>
-      <button className="topbar-btn btn-primary" onClick={onNewTask}>
+      <button className="topbar-btn btn-primary btn-new" onClick={onNewTask}>
         + New Task
       </button>
     </div>
