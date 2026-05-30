@@ -41,11 +41,19 @@ function getBrowserTimezone(): string {
   }
 }
 
+/**
+ * All API calls now require a token (the backend returns 401 without one).
+ * The `token` parameter is mandatory on every method that hits a protected
+ * endpoint.
+ */
 export const api = {
   listProjects: () => request<Project[]>('/projects'),
   listUsers: () => request<User[]>('/users'),
-  listTasks: () => request<Task[]>('/tasks'),
-  createTask: (payload: TaskInput, opts: CreateTaskOptions = {}) => {
+
+  // Protected endpoints — require token
+  listTasks: (token: string) => request<Task[]>('/tasks', { token }),
+
+  createTask: (payload: TaskInput, token: string, opts: CreateTaskOptions = {}) => {
     const params = new URLSearchParams()
     if (opts.addToOutlook) {
       params.set('add_to_outlook', 'true')
@@ -55,16 +63,23 @@ export const api = {
     return request<Task>(`/tasks${qs}`, {
       method: 'POST',
       body: JSON.stringify(payload),
-      token: opts.token ?? null,
+      token,
     })
   },
-  updateTask: (id: number, payload: Partial<TaskInput>) =>
-    request<Task>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
-  deleteTask: (id: number) => request<void>(`/tasks/${id}`, { method: 'DELETE' }),
-  askAssistant: (text: string, language: AssistantLanguage, token?: string | null) =>
+
+  updateTask: (id: string, payload: Partial<TaskInput>, token: string) =>
+    request<Task>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(payload), token }),
+
+  deleteTask: (id: string, token: string) =>
+    request<void>(`/tasks/${id}`, { method: 'DELETE', token }),
+
+  askAssistant: (text: string, language: AssistantLanguage, token: string) =>
     request<AssistantResponse>('/assistant', {
       method: 'POST',
       body: JSON.stringify({ text, language, tz: getBrowserTimezone() }),
       token,
     }),
+
+  getMe: (token: string) =>
+    request<{ user_id: string; display_name: string; email: string }>('/me', { token }),
 }

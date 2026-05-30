@@ -3,7 +3,9 @@ export type Priority = 'high' | 'medium' | 'low'
 export type Tag = 'dev' | 'design' | 'qa' | 'pm'
 
 export interface Task {
-  id: number
+  // String IDs because tasks live in Azure Cosmos DB, where the document
+  // primary key is always a string (we use UUIDv4 hex).
+  id: string
   title: string
   desc: string
   status: Status

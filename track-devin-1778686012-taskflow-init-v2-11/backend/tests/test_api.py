@@ -1,7 +1,6 @@
 """Smoke tests for the TaskFlow REST API."""
 from __future__ import annotations
 
-import os
 from collections.abc import Iterator
 from datetime import UTC, date, datetime
 
@@ -10,20 +9,25 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch) -> Iterator[TestClient]:
-    db_path = tmp_path / "test.db"
-    monkeypatch.setenv("TASKFLOW_DB_PATH", str(db_path))
-    # Reload modules so they pick up the patched env var.
-    import importlib
+def client(monkeypatch) -> Iterator[TestClient]:
+    """Spin up the API against a fresh in-memory task repository.
 
-    import app.db as db_module
-    import app.main as main_module
+    Cosmos DB env vars are explicitly cleared so `get_repository()` falls
+    back to `InMemoryTaskRepository`. The previous singleton is reset so
+    each test starts with an empty store before the seed runs.
+    """
+    for var in ("COSMOS_ENDPOINT", "COSMOS_KEY", "COSMOS_USE_AAD"):
+        monkeypatch.delenv(var, raising=False)
 
-    importlib.reload(db_module)
-    importlib.reload(main_module)
+    from app import main as main_module
+    from app import repository as repository_module
+
+    repository_module.reset_repository(repository_module.InMemoryTaskRepository())
 
     with TestClient(main_module.app) as test_client:
         yield test_client
+
+    repository_module.reset_repository(None)
 
 
 def test_health(client: TestClient) -> None:
@@ -48,6 +52,8 @@ def test_projects_and_users(client: TestClient) -> None:
 def test_tasks_seeded(client: TestClient) -> None:
     tasks = client.get("/api/tasks").json()
     assert len(tasks) == 8
+    # IDs are now strings (Cosmos requirement); verify shape.
+    assert all(isinstance(t["id"], str) and t["id"] for t in tasks)
 
 
 def test_create_update_delete_task(client: TestClient) -> None:
@@ -66,6 +72,7 @@ def test_create_update_delete_task(client: TestClient) -> None:
     assert created["title"] == "Test task"
     assert created["due_time"] == "15:30"
     task_id = created["id"]
+    assert isinstance(task_id, str) and task_id
 
     updated = client.patch(
         f"/api/tasks/{task_id}", json={"status": "done", "due_time": "09:00"}
@@ -283,8 +290,3 @@ def test_assistant_no_conflict_when_slot_is_free(
         json={"text": "schedule something in the far future", "language": "en-US"},
     ).json()
     assert body["conflict"] is None
-
-
-def teardown_module(_module) -> None:
-    """Reset env var after tests."""
-    os.environ.pop("TASKFLOW_DB_PATH", None)

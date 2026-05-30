@@ -1,12 +1,18 @@
-"""SQLModel table and Pydantic schemas for TaskFlow."""
+"""Pydantic schemas for TaskFlow.
+
+Tasks are stored as JSON documents in Azure Cosmos DB (NoSQL Core API), so
+there are no ORM table classes here. The `Task` model is the canonical
+in-memory representation; the repository layer is responsible for
+serialising it to/from Cosmos documents.
+"""
 from __future__ import annotations
 
 import re
+import uuid
 from datetime import UTC, date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, field_validator
-from sqlmodel import Field, SQLModel
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Status = Literal["todo", "inprog", "done"]
 Priority = Literal["high", "medium", "low"]
@@ -23,23 +29,44 @@ def _validate_due_time(value: str | None) -> str | None:
     return value
 
 
-class Task(SQLModel, table=True):
-    """Database table for tasks. Uses plain `str` columns so SQLModel can map them."""
+def _utcnow_naive() -> datetime:
+    """Return a naive UTC datetime to keep created_at/updated_at JSON-friendly."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
-    __tablename__ = "tasks"
 
-    id: int | None = Field(default=None, primary_key=True)
+def _new_id() -> str:
+    return uuid.uuid4().hex
+
+
+class Task(BaseModel):
+    """Canonical Task document stored in Cosmos DB.
+
+    Cosmos requires a string `id`. The partition key is now `/user_id`
+    so each user's tasks live in their own logical partition — enabling
+    efficient single-partition reads for the common "list my tasks" query.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str = Field(default_factory=_new_id)
+    # Owner of the task — Microsoft Graph Object ID (OID).
+    user_id: str = ""
     title: str
     desc: str = ""
-    status: str = "todo"
-    priority: str = "medium"
-    tag: str = "dev"
+    status: Status = "todo"
+    priority: Priority = "medium"
+    tag: Tag = "dev"
     assignee: str = "YO"
     due: date | None = None
     due_time: str | None = None
     proj: str = "Website Redesign"
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC).replace(tzinfo=None))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC).replace(tzinfo=None))
+    created_at: datetime = Field(default_factory=_utcnow_naive)
+    updated_at: datetime = Field(default_factory=_utcnow_naive)
+
+    @field_validator("due_time", mode="before")
+    @classmethod
+    def _check_task_time(cls, value: str | None) -> str | None:
+        return _validate_due_time(value)
 
 
 class TaskCreate(BaseModel):
@@ -79,7 +106,7 @@ class TaskUpdate(BaseModel):
 
 
 class TaskRead(BaseModel):
-    id: int
+    id: str
     title: str
     desc: str
     status: Status

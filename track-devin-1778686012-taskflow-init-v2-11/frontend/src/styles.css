@@ -202,18 +202,20 @@ button{font-family:inherit}
 .assistant-lang-btn:hover{background:var(--surface2);color:var(--text)}
 .assistant-lang-btn.active{background:var(--accent-bg);color:var(--accent2);border-color:var(--accent-border)}
 
-.assistant-record-row{display:flex;align-items:center;gap:14px;margin-bottom:14px}
-.assistant-record-btn{display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:99px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;transition:all .15s}
+.assistant-record-row{display:flex;align-items:center;gap:14px;margin-bottom:14px;overflow:visible}
+.assistant-record-btn{display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:99px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;transition:all .15s;overflow:hidden;position:relative}
 .assistant-record-btn:hover:not(:disabled){background:var(--surface3)}
 .assistant-record-btn:disabled{opacity:.5;cursor:not-allowed}
 .assistant-record-btn.recording{background:var(--red-bg);border-color:var(--red);color:var(--red)}
-.assistant-record-dot{width:10px;height:10px;border-radius:50%;background:var(--red);box-shadow:0 0 0 0 rgba(245,96,96,.7)}
+.assistant-record-dot{width:10px;height:10px;border-radius:50%;background:var(--red);flex-shrink:0}
 .assistant-record-btn.recording .assistant-record-dot{animation:pulse 1.2s infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(245,96,96,.7)}70%{box-shadow:0 0 0 10px rgba(245,96,96,0)}100%{box-shadow:0 0 0 0 rgba(245,96,96,0)}}
-.assistant-status{font-size:12px;color:var(--text2);flex:1}
-.assistant-status-hint{color:var(--text3);font-style:italic}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(245,96,96,.7)}70%{box-shadow:0 0 0 6px rgba(245,96,96,0)}100%{box-shadow:0 0 0 0 rgba(245,96,96,0)}}
+.assistant-status{font-size:12px;color:var(--text2);flex:1;display:flex;align-items:center;gap:8px;min-width:0}
+.assistant-status-hint{color:var(--text3);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .assistant-status-error{color:var(--amber)}
 .assistant-status-pulse{color:var(--red);font-weight:500}
+.assistant-status-thinking{display:inline-flex;align-items:center;gap:6px;color:var(--accent2);font-weight:500}
+.assistant-status-thinking .assistant-spinner-sm{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid var(--border);border-top-color:var(--accent2);animation:assistant-spin .8s linear infinite;box-sizing:border-box;flex-shrink:0}
 
 .assistant-textarea{resize:vertical;min-height:80px;font-size:13px;font-family:inherit;line-height:1.5}
 .assistant-error{margin-top:10px;padding:8px 12px;border:1px solid var(--red);background:var(--red-bg);color:var(--red);border-radius:var(--radius-sm);font-size:12px}
@@ -246,3 +248,452 @@ button{font-family:inherit}
 .ms-badge{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:3px;background:#0078d4;color:#fff;font-size:9px;font-weight:700;letter-spacing:.5px}
 .ms-name{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ms-signout-x{color:var(--text3);font-size:11px;margin-left:2px}
+
+
+
+/* Login screen */
+.login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);padding:24px}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:40px 36px;max-width:400px;width:100%;text-align:center;animation:slideUp .3s ease}
+.login-logo{display:flex;align-items:center;gap:12px;justify-content:center;margin-bottom:24px}
+.login-desc{font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:28px}
+.login-btn{display:inline-flex;align-items:center;gap:10px;padding:12px 28px;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;border:1px solid #0078d4;background:#0078d4;color:#fff;font-family:inherit;transition:all .15s}
+.login-btn:hover:not(:disabled){background:#106ebe;border-color:#106ebe}
+.login-btn:disabled{opacity:.5;cursor:not-allowed}
+.login-hint{font-size:12px;color:var(--text3);margin-top:16px}
+
+
+
+/* ============================================================ */
+/* Mobile / responsive (≤ 768px) — proper native-feel layout    */
+/* ============================================================ */
+
+/* Burger button — visible only on mobile */
+.topbar-burger {
+  display: none;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.topbar-burger:active { background: var(--surface2); }
+.topbar-burger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: var(--text);
+  border-radius: 2px;
+  transition: transform .2s, opacity .2s;
+}
+.app.menu-open .topbar-burger span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.app.menu-open .topbar-burger span:nth-child(2) { opacity: 0; }
+.app.menu-open .topbar-burger span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* Mobile dim overlay behind drawer */
+.mobile-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  z-index: 90;
+  animation: fadeIn .2s ease;
+}
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+
+/* Floating Action Button — primary action on mobile (new task) */
+.fab {
+  display: none;
+  position: fixed;
+  bottom: 24px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(124, 106, 247, .45), 0 2px 8px rgba(0,0,0,.4);
+  z-index: 50;
+  transition: transform .15s, box-shadow .15s;
+  font-family: inherit;
+}
+.fab:active {
+  transform: scale(.92);
+  box-shadow: 0 3px 12px rgba(124, 106, 247, .5);
+}
+
+@media (max-width: 768px) {
+  /* Show mobile-only controls */
+  .topbar-burger { display: flex; }
+  .mobile-overlay { display: block; }
+  .fab { display: flex; align-items: center; justify-content: center; }
+
+  /* Layout: keep flex-row, but sidebar becomes a slide-out drawer */
+  .app {
+    flex-direction: row;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 80%;
+    max-width: 300px;
+    z-index: 100;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,.4);
+    border-right: 1px solid var(--border);
+    border-bottom: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .app.menu-open .sidebar {
+    transform: translateX(0);
+  }
+
+  /* Sidebar — restore vertical "native app" look inside the drawer */
+  .sidebar-logo {
+    padding: 18px 16px 14px;
+  }
+  .nav-section {
+    display: block;
+    padding: 14px 8px 6px;
+    overflow: visible;
+  }
+  .nav-label {
+    display: block;
+    font-size: 10px;
+    padding: 0 8px;
+    margin-bottom: 6px;
+  }
+  .sidebar-projects {
+    display: block;
+    padding: 0 8px;
+    overflow: visible;
+  }
+  .nav-item, .proj-item {
+    display: flex;
+    width: 100%;
+    flex-shrink: 0;
+    white-space: normal;
+    padding: 12px 12px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    border: none;
+    font-size: 14.5px;
+    margin-bottom: 2px;
+  }
+  .nav-item.active, .proj-item.active {
+    background: var(--accent-bg);
+    border-color: transparent;
+  }
+  .nav-item:active:not(.active),
+  .proj-item:active:not(.active) {
+    background: var(--surface2);
+  }
+  .nav-badge {
+    margin-left: auto;
+    font-size: 10px;
+    padding: 2px 7px;
+  }
+  .sidebar-bottom {
+    border-top: 1px solid var(--border);
+    border-bottom: none;
+    padding: 12px 12px;
+  }
+  .user-row {
+    padding: 8px;
+  }
+
+  .main {
+    flex: 1;
+    width: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* Topbar — mobile-friendly: burger + title + AI icon. Hide other things. */
+  .topbar {
+    height: 56px;
+    min-height: 56px;
+    padding: 0 8px 0 4px;
+    gap: 6px;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+  .topbar-title {
+    font-size: 16px;
+    font-weight: 600;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Hide bulky search / sign-in / export / new-task — they have other entry points */
+  .topbar .search-box,
+  .topbar .btn-ms,
+  .topbar .btn-export,
+  .topbar .btn-new {
+    display: none;
+  }
+  /* AI button stays — it's primary value */
+  .topbar .btn-assistant {
+    padding: 8px 14px;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  .content {
+    padding: 14px 14px 90px; /* extra bottom padding so FAB doesn't overlap last item */
+    overflow: visible;
+  }
+
+  /* Stats: 2 columns, more breathing room */
+  .stats-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .stat-card { padding: 14px; }
+  .stat-num { font-size: 22px; }
+  .stat-lbl { font-size: 11px; }
+
+  .prog-section { padding: 14px 16px; margin-bottom: 16px; }
+  .prog-labels { gap: 12px; flex-wrap: wrap; }
+
+  /* Filters — compact, scrollable horizontally if doesn't fit */
+  .filters-row {
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .filters-row::-webkit-scrollbar { display: none; }
+  .filter-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .filters-right {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  /* Task table → card list on mobile.
+     The TaskTable renders 7 direct children inside each .task-row:
+       1. .chkbox                   (checkbox)
+       2. div with .task-name       (title + project)
+       3. div with category badge
+       4. div with priority badge
+       5. div with status dot/label
+       6. .assignee-cell            (avatar + code)
+       7. .due-cell                 (due date + actions)
+
+     Trick: switch the row from CSS Grid to plain Flexbox column layout.
+     Then we can re-order siblings with `order:` and group badges /
+     status visually with negative margins or extra wrappers — much
+     less brittle than nth-child(N) into grid-areas. */
+  .table-head { display: none; }
+  .task-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 8px 10px;
+    padding: 14px 14px;
+  }
+  /* Checkbox on the left, full title takes the rest of the first row */
+  .task-row > .chkbox        { order: 0; flex-shrink: 0; align-self: flex-start; margin-top: 2px; }
+  .task-row > *:nth-child(2) { order: 1; flex: 1 1 calc(100% - 38px); min-width: 0; }
+  /* Both badges go on the next row, side-by-side */
+  .task-row > *:nth-child(3) { order: 2; flex: 0 0 auto; margin-left: 38px; }
+  .task-row > *:nth-child(4) { order: 3; flex: 0 0 auto; }
+  /* Status indicator goes after, aligned with badges */
+  .task-row > *:nth-child(5) { order: 4; flex: 0 0 auto; }
+  /* Spacer pushes assignee to the right of the same row when there's space */
+  .task-row > *:nth-child(6) { order: 5; flex: 0 0 auto; margin-left: auto; }
+  /* Due-date row spans full width */
+  .task-row > *:nth-child(7) {
+    order: 6;
+    flex: 1 1 100%;
+    margin-left: 38px;
+    margin-top: 4px;
+  }
+  .row-actions { opacity: 1; }
+  .task-name {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    font-size: 15px;
+    line-height: 1.35;
+    font-weight: 500;
+  }
+  .task-proj { font-size: 12px; }
+  .due-cell {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+  .act-btn {
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+  }
+
+  /* Modal as bottom-sheet */
+  .modal-bg {
+    padding: 0;
+    align-items: flex-end;
+    background: rgba(0,0,0,.6);
+  }
+  .modal {
+    width: 100%;
+    max-width: 100%;
+    /* Cap height aggressively so the user never has to zoom out to see
+       the action buttons — including iPhone notch / home indicator. */
+    max-height: calc(100vh - 40px);
+    max-height: calc(100dvh - 40px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 18px 18px 0 0;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom)) 16px;
+    animation: slideUpMobile .28s cubic-bezier(.4,0,.2,1);
+    border-bottom: none;
+    border-left: none;
+    border-right: none;
+  }
+  .modal-header {
+    margin-bottom: 14px;
+  }
+  .modal-title {
+    font-size: 17px;
+  }
+  .form-group {
+    margin-bottom: 12px;
+  }
+  .form-label {
+    margin-bottom: 4px;
+    font-size: 11.5px;
+  }
+  /* Drag-handle at the top of the bottom sheet for native feel */
+  .modal::before {
+    content: "";
+    display: block;
+    width: 40px;
+    height: 4px;
+    background: var(--border2);
+    border-radius: 2px;
+    margin: -4px auto 12px;
+    flex-shrink: 0;
+  }
+  @keyframes slideUpMobile {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .form-row { grid-template-columns: 1fr; gap: 10px; }
+  .form-input {
+    padding: 10px 12px;
+    font-size: 16px; /* iOS won't auto-zoom only if ≥ 16px */
+  }
+  textarea.form-input {
+    min-height: 60px;
+  }
+  .modal-actions {
+    flex-direction: column-reverse;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .modal-actions > button {
+    width: 100%;
+    padding: 12px;
+    font-size: 15px;
+    justify-content: center;
+  }
+
+  /* Assistant modal — bigger record button, full-width controls */
+  .assistant-modal { width: 100%; max-width: 100%; }
+  .assistant-subtitle { font-size: 13px; line-height: 1.5; }
+  .assistant-lang-row { gap: 8px; }
+  .assistant-lang-btn {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+  .assistant-record-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .assistant-record-btn {
+    padding: 16px 24px;
+    font-size: 16px;
+    justify-content: center;
+    width: 100%;
+  }
+  .assistant-record-dot {
+    width: 12px;
+    height: 12px;
+  }
+  .assistant-status {
+    text-align: center;
+    justify-content: center;
+    flex: 0 0 auto;
+  }
+  .assistant-status-hint {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    font-size: 12.5px;
+    line-height: 1.4;
+  }
+  .assistant-textarea {
+    min-height: 110px;
+    font-size: 15px; /* no iOS zoom */
+    padding: 12px;
+  }
+  .assistant-conflict { gap: 8px; padding: 12px; }
+  .assistant-conflict-alts { padding-left: 0; gap: 6px; }
+  .assistant-conflict-alt { padding: 8px 14px; font-size: 13px; }
+  .assistant-conflict-dismiss { margin-left: 0; padding: 6px 0; font-size: 12px; }
+
+  /* Toast */
+  .toast {
+    left: 14px;
+    right: 14px;
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    justify-content: center;
+  }
+
+  /* Login screen — tighter on mobile */
+  .login-screen { padding: 16px; }
+  .login-card { padding: 32px 22px; }
+}
+
+/* Smallest screens (≤ 480px) — squeeze stats to 1 column */
+@media (max-width: 480px) {
+  .stats-row { grid-template-columns: 1fr; }
+  .modal { padding: 14px 12px calc(14px + env(safe-area-inset-bottom)) 12px; }
+  .modal-actions > button { padding: 11px; font-size: 14.5px; }
+  .login-card { padding: 28px 20px; }
+}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from './api'
 import { useMicrosoftAuth } from './useMicrosoftAuth'
 import { AssistantPanel } from './components/AssistantPanel'
@@ -26,6 +26,36 @@ interface ToastState {
   variant: 'success' | 'error'
 }
 
+function LoginScreen({ onSignIn, loading }: { onSignIn: () => void; loading: boolean }) {
+  return (
+    <div className="login-screen">
+      <div className="login-card">
+        <div className="login-logo">
+          <div className="logo-icon">TF</div>
+          <div>
+            <div className="logo-name">TaskFlow</div>
+            <div className="logo-sub">Team Task Manager</div>
+          </div>
+        </div>
+        <p className="login-desc">
+          Sign in with your Microsoft account to access your personal task board.
+        </p>
+        <button
+          className="login-btn"
+          onClick={onSignIn}
+          disabled={loading}
+        >
+          <span className="ms-badge">MS</span>
+          {loading ? 'Signing in…' : 'Sign in with Microsoft'}
+        </button>
+        <p className="login-hint">
+          Works with personal (@outlook.com) and work/school accounts.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const ms = useMicrosoftAuth()
   const [tasks, setTasks] = useState<Task[]>([])
@@ -44,6 +74,7 @@ function App() {
     conflict: AssistantConflict | null
   } | null>(null)
   const [assistantOpen, setAssistantOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [toast, setToast] = useState<ToastState | null>(null)
   const toastTimer = useRef<number | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -54,9 +85,26 @@ function App() {
     toastTimer.current = window.setTimeout(() => setToast(null), 2500)
   }, [])
 
+  // Use a ref to avoid re-creating refresh when getToken identity changes
+  const msRef = useRef(ms)
+  msRef.current = ms
+
   const refresh = useCallback(async () => {
+    if (!msRef.current.isSignedIn) {
+      setLoading(false)
+      return
+    }
     try {
-      const [t, p, u] = await Promise.all([api.listTasks(), api.listProjects(), api.listUsers()])
+      const token = await msRef.current.getToken()
+      if (!token) {
+        setLoading(false)
+        return
+      }
+      const [t, p, u] = await Promise.all([
+        api.listTasks(token),
+        api.listProjects(),
+        api.listUsers(),
+      ])
       setTasks(t)
       setProjects(p)
       setUsers(u)
@@ -69,9 +117,11 @@ function App() {
   }, [showToast])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    refresh()
-  }, [refresh])
+    if (ms.isSignedIn) {
+      refresh()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ms.isSignedIn])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -87,19 +137,28 @@ function App() {
     return () => document.removeEventListener('keydown', onKey)
   }, [])
 
+  // If not signed in, show login screen
+  if (!ms.isSignedIn) {
+    return <LoginScreen onSignIn={ms.signIn} loading={!ms.enabled} />
+  }
+
   const title = VIEW_TITLES[view] ?? view
 
-  const filteredTasks = useMemo(() => {
-    const byView = applyView(tasks, view)
-    const byFilter = applyFilter(byView, filter)
-    const byQuery = applySearch(byFilter, search)
-    return applySort(byQuery, sort)
-  }, [tasks, view, filter, search, sort])
+  // Tasks visible in the current view (e.g. only this project / only mytasks).
+  // We use this as the "All" count in the filter chip — without this the
+  // chip showed the global task total even when the user was inside a
+  // project that contained none of those tasks.
+  const viewTasks = applyView(tasks, view)
+  const filteredTasks = applySort(
+    applySearch(applyFilter(viewTasks, filter), search),
+    sort,
+  )
 
   function selectView(next: View) {
     setView(next)
     setFilter('all')
     setSort('')
+    setMobileMenuOpen(false)
   }
 
   function openCreate() {
@@ -123,7 +182,8 @@ function App() {
   }
 
   async function handleAssistantSubmit(text: string, language: 'ru-RU' | 'en-US'): Promise<AssistantResponse> {
-    const token = ms.isSignedIn ? await ms.getToken() : null
+    const token = await ms.getToken()
+    if (!token) throw new Error('Not authenticated')
     return api.askAssistant(text, language, token)
   }
 
@@ -151,9 +211,14 @@ function App() {
 
   async function handleSave(
     data: TaskInput,
-    id: number | null,
+    id: string | null,
     opts: { addToOutlook?: boolean } = {},
   ) {
+    const token = await ms.getToken()
+    if (!token) {
+      showToast('Session expired — please sign in again', 'error')
+      return
+    }
     try {
       const payload: TaskInput = {
         ...data,
@@ -161,24 +226,19 @@ function App() {
         due_time: data.due_time ? data.due_time : null,
       }
       if (id) {
-        const updated = await api.updateTask(id, payload)
+        const updated = await api.updateTask(id, payload, token)
         setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)))
         showToast('Task updated!')
       } else {
-        // The login flow already requested Calendars.ReadWrite, so the cached
-        // token has write access. No additional consent popup needed.
-        const token =
-          opts.addToOutlook && ms.isSignedIn ? await ms.getToken() : null
-        const created = await api.createTask(payload, {
+        const created = await api.createTask(payload, token, {
           addToOutlook: opts.addToOutlook,
-          token,
         })
         setTasks((prev) => [...prev, created])
         if (opts.addToOutlook) {
           showToast(
             created.outlook_event_id
               ? 'Task added & sent to Outlook!'
-              : 'Task added (Outlook sync failed \u2014 see backend logs)',
+              : 'Task added (Outlook sync failed — see backend logs)',
             created.outlook_event_id ? 'success' : 'error',
           )
         } else {
@@ -193,9 +253,11 @@ function App() {
   }
 
   async function handleToggle(task: Task) {
+    const token = await ms.getToken()
+    if (!token) return
     const nextStatus = task.status === 'done' ? 'todo' : 'done'
     try {
-      const updated = await api.updateTask(task.id, { status: nextStatus })
+      const updated = await api.updateTask(task.id, { status: nextStatus }, token)
       setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)))
       showToast(nextStatus === 'done' ? 'Task completed! ✓' : 'Task reopened')
     } catch (err) {
@@ -205,8 +267,10 @@ function App() {
   }
 
   async function handleDelete(task: Task) {
+    const token = await ms.getToken()
+    if (!token) return
     try {
-      await api.deleteTask(task.id)
+      await api.deleteTask(task.id, token)
       setTasks((prev) => prev.filter((t) => t.id !== task.id))
       showToast('Task deleted')
     } catch (err) {
@@ -226,7 +290,10 @@ function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app ${mobileMenuOpen ? 'menu-open' : ''}`}>
+      {mobileMenuOpen && (
+        <div className="mobile-overlay" onClick={() => setMobileMenuOpen(false)} />
+      )}
       <Sidebar view={view} tasks={tasks} projects={projects} onSelect={selectView} />
       <div className="main">
         <Topbar
@@ -237,6 +304,7 @@ function App() {
           onExport={handleExport}
           onNewTask={openCreate}
           onOpenAssistant={() => setAssistantOpen(true)}
+          onToggleMenu={() => setMobileMenuOpen((v) => !v)}
           ms={ms}
         />
         <div className="content">
@@ -247,7 +315,7 @@ function App() {
           ) : (
             <TaskTable
               tasks={filteredTasks}
-              totalCount={tasks.length}
+              totalCount={viewTasks.length}
               showFilters
               filter={filter}
               onFilterChange={setFilter}
@@ -282,6 +350,10 @@ function App() {
           msSignedIn={ms.isSignedIn}
         />
       )}
+      {/* Mobile FAB — quick access to "new task" with thumb. Hidden on desktop via CSS. */}
+      <button className="fab fab-new" onClick={openCreate} aria-label="New task">
+        +
+      </button>
       <Toast message={toast?.message ?? null} variant={toast?.variant} />
     </div>
   )

@@ -15,6 +15,8 @@ name: Deploy to Azure
 #   AZURE_CONTAINER_REGISTRY   – ACR login server (e.g. taskflowacr.azurecr.io)
 #   AZURE_CONTAINER_IMAGE      – Image name in ACR (e.g. taskflow-backend)
 #   GEMINI_API_KEY             – Forwarded to the running container
+#   COSMOS_ENDPOINT            – e.g. https://<account>.documents.azure.com:443/
+#   COSMOS_KEY                 – Cosmos DB primary key (omit if using AAD)
 # Required GitHub repository variables (vars):
 #   VITE_AZURE_CLIENT_ID       – Public Entra App registration ID for the SPA
 #   VITE_AZURE_TENANT_ID       – Tenant ID (or "common")
@@ -83,9 +85,22 @@ jobs:
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
       - name: Update Container App
+        # IMPORTANT: --set-env-vars REPLACES the entire env list. Every var
+        # the backend needs must be listed here, otherwise it gets wiped on
+        # the next deploy. Secret values are pulled from Container App
+        # secrets (set out-of-band via `az containerapp secret set ...`),
+        # so the workflow itself never handles raw keys.
         run: |
           az containerapp update \
             --name "${{ secrets.AZURE_CONTAINER_APP_NAME }}" \
             --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
             --image "$IMAGE" \
-            --set-env-vars GEMINI_API_KEY=secretref:gemini-api-key
+            --set-env-vars \
+              GEMINI_API_KEY=secretref:gemini-api-key \
+              COSMOS_ENDPOINT=secretref:cosmos-endpoint \
+              COSMOS_KEY=secretref:cosmos-key \
+              COSMOS_DATABASE=taskflow \
+              COSMOS_CONTAINER=tasks \
+              AZURE_OPENAI_ENDPOINT=secretref:azure-openai-endpoint \
+              AZURE_OPENAI_API_KEY=secretref:azure-openai-key \
+              AZURE_OPENAI_DEPLOYMENT=secretref:azure-openai-deployment
